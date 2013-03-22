@@ -11,5 +11,5 @@ public abstract class MessageEncoder<R, M> {
         this.topicName = topicName;
     }
 
-    public abstract M toMessage(R record);
+    public abstract M toBytes(R record);
 }
