@@ -16,8 +16,10 @@ import java.util.Properties;
 import java.util.Random;
 
 import kafka.javaapi.message.ByteBufferMessageSet;
-import kafka.javaapi.producer.SyncProducer;
+import kafka.javaapi.producer.Producer;
 import kafka.message.Message;
+import kafka.producer.KeyedMessage;
+import kafka.producer.ProducerConfig;
 import kafka.producer.SyncProducerConfig;
 
 import org.apache.avro.generic.IndexedRecord;
@@ -310,10 +312,10 @@ public class EtlCounts {
     }
 
     public void postTrackingCountToKafka(String tier, List<URI> brokerURI) {
-        MessageEncoder<IndexedRecord, Message> encoder;
+        MessageEncoder<IndexedRecord, byte[]> encoder;
 
         try {
-            encoder = (MessageEncoder<IndexedRecord, Message>) Class.forName(
+            encoder = (MessageEncoder<IndexedRecord, byte[]>) Class.forName(
                     conf.get(CamusJob.CAMUS_MESSAGE_ENCODER_CLASS)).newInstance();
 
             Properties props = new Properties();
@@ -326,7 +328,7 @@ public class EtlCounts {
             throw new RuntimeException(e1);
         }
 
-        ArrayList<Message> monitorSet = new ArrayList<Message>();
+        ArrayList<byte[]> monitorSet = new ArrayList<byte[]>();
         long timestamp = new DateTime().getMillis();
         int counts = 0;
         for (Map.Entry<Source, Long> countEntry : trackingCount.entrySet()) {
@@ -356,7 +358,7 @@ public class EtlCounts {
             trackingRecord.tier = tier;
             trackingRecord.eventType = topic;
 
-            Message message = encoder.toMessage(trackingRecord);
+            byte[] message = encoder.toBytes(trackingRecord);
             monitorSet.add(message);
 
             if (monitorSet.size() >= 1000) {
@@ -374,38 +376,40 @@ public class EtlCounts {
         System.out.println(topic + " sent " + counts + " counts");
     }
 
-    private void produceCount(List<URI> brokerURI, ArrayList<Message> monitorSet) {
-        // Shuffle the broker
-        Collections.shuffle(brokerURI);
-
-        SyncProducer basicProducer = null;
-        for (URI uri : brokerURI) {
-            Properties props = new Properties();
-            props.put("host", uri.getHost());
-            props.put("port", String.valueOf(uri.getPort()));
-            props.put("buffer.size", String.valueOf(512 * 1024));
-            System.out.println("Host " + uri.getHost() + " port " + props.get("port"));
-
-            try {
-                SyncProducerConfig config = new SyncProducerConfig(props);
-
-                basicProducer = new SyncProducer(config);
-
-                ByteBufferMessageSet byteBuffer = new ByteBufferMessageSet(monitorSet);
-                basicProducer.send("TrackingMonitoringEvent", byteBuffer);
-
-                break;
-            } catch (Exception e) {
-                e.printStackTrace();
-                System.out.println(topic + " issue sending tracking to " + uri);
-                continue;
-            } finally {
-                if (basicProducer != null) {
-                    basicProducer.close();
-                }
-            }
-        }
-    }
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+	private void produceCount(List<URI> brokerURI, ArrayList<byte[]> monitorSet) {
+   		// Shuffle the broker
+    	System.out.println("In produce count");
+   		Collections.shuffle(brokerURI);
+   		for (URI uri : brokerURI) {
+   			Properties props = new Properties();
+   			props.put("broker.list", uri.getHost() + ":" + uri.getPort());
+   			props.put("buffer.size", 524288);
+   			props.put("producer.type", "sync");
+   			System.out.println("Host " + uri.getHost() + " port "
+   					+ uri.getPort());
+			Producer producer = new Producer(new ProducerConfig(props));
+   			try {
+   				for(byte[] message : monitorSet)
+   				{
+				KeyedMessage keyedMessage = new KeyedMessage(
+   						"TrackingMonitoringEvent", message);
+   				System.out.println("Sending the keyed message");
+   				producer.send(keyedMessage);
+   				System.out.println("completed sending the keyed message");
+   				break;
+   				}
+   			} catch (Exception e) {
+   				e.printStackTrace();
+   				System.out.println(topic + " issue sending tracking to " + uri);
+   				continue;
+   			} finally {
+   				if (producer != null) {
+   					producer.close();
+   				}
+   			}
+   		}
+   	}
 
     @Override
     public String toString() {

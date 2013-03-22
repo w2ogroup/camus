@@ -5,7 +5,13 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import kafka.api.OffsetRequest;
+import java.util.HashMap;
+import java.util.Map;
+
+import kafka.api.PartitionOffsetRequestInfo;
+import kafka.common.TopicAndPartition;
+import kafka.javaapi.OffsetRequest;
+import kafka.javaapi.OffsetResponse;
 import kafka.javaapi.consumer.SimpleConsumer;
 
 import org.apache.hadoop.io.UTF8;
@@ -195,9 +201,20 @@ public class EtlRequest implements Writable {
 	}
 
 	public long getEarliestOffset() {
-		if (this.earliestOffset == -2 && uri != null){
-			SimpleConsumer consumer = new SimpleConsumer(uri.getHost(), uri.getPort(), 30000, 1024 * 1024);
-			long[] endOffset = consumer.getOffsetsBefore(topic, partition, OffsetRequest.EarliestTime(), 1);
+		if (this.earliestOffset == -2 && uri != null) {
+			SimpleConsumer consumer = new SimpleConsumer(uri.getHost(),
+					uri.getPort(), KafkaClient.getKafkaTimeoutValue(),
+					KafkaClient.getKafkaBufferSize(),
+					KafkaClient.getKafkaClientName());
+			Map<TopicAndPartition, PartitionOffsetRequestInfo> offsetInfo = new HashMap<TopicAndPartition, PartitionOffsetRequestInfo>();
+			offsetInfo.put(
+					new TopicAndPartition(topic, partition),
+					new PartitionOffsetRequestInfo(kafka.api.OffsetRequest
+							.EarliestTime(), 1));
+			OffsetResponse response = consumer.getOffsetsBefore(new OffsetRequest(offsetInfo,
+							kafka.api.OffsetRequest.CurrentVersion(), KafkaClient
+									.getKafkaClientName()));
+			long[] endOffset = response.offsets(topic, partition);
 			consumer.close();
 			this.earliestOffset = endOffset[0];
 			return endOffset[0];
@@ -208,16 +225,24 @@ public class EtlRequest implements Writable {
 
 	public long getLastOffset() {
 		if (this.latestOffset == -1 && uri != null)
-			return getLastOffset(OffsetRequest.LatestTime());
+			return getLastOffset(kafka.api.OffsetRequest.LatestTime());
 		else
 			return this.latestOffset;
 	}
 
 	public long getLastOffset(long time) {
-		SimpleConsumer consumer = new SimpleConsumer(uri.getHost(), uri.getPort(), 30000, 1024 * 1024);
-		long[] endOffset = consumer.getOffsetsBefore(topic, partition, time, 1);
+		SimpleConsumer consumer = new SimpleConsumer(uri.getHost(),
+				uri.getPort(), KafkaClient.getKafkaTimeoutValue(),
+				KafkaClient.getKafkaBufferSize(), KafkaClient.getKafkaClientName());
+		//TODO : maxNumOffets value? What needs to be put here?
+		Map<TopicAndPartition, PartitionOffsetRequestInfo> offsetInfo = new HashMap<TopicAndPartition, PartitionOffsetRequestInfo>();
+		offsetInfo.put(new TopicAndPartition(topic, partition),
+				new PartitionOffsetRequestInfo(time, 1));
+		OffsetResponse response = consumer.getOffsetsBefore(new OffsetRequest(
+				offsetInfo, kafka.api.OffsetRequest.CurrentVersion(), KafkaClient
+						.getKafkaClientName()));
+		long[] endOffset = response.offsets(topic, partition);
 		consumer.close();
-
 		this.latestOffset = endOffset[0];
 		return endOffset[0];
 	}

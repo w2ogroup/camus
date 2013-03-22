@@ -29,7 +29,8 @@ public class LatestSchemaKafkaAvroMessageDecoder extends KafkaAvroMessageDecoder
                             schema, 
                             new String(
                                     message.payload().array(), 
-                                    Message.payloadOffset(message.magic()),
+                                    //Message.payloadOffset(message.magic()),
+                                    Message.MagicOffset(),
                                     message.payloadSize()
                             )
                     )

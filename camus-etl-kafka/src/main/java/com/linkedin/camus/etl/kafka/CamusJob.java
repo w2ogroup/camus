@@ -55,7 +55,6 @@ import org.joda.time.format.DateTimeFormatter;
 import com.linkedin.camus.etl.kafka.common.DateUtils;
 import com.linkedin.camus.etl.kafka.common.EtlCounts;
 import com.linkedin.camus.etl.kafka.common.EtlKey;
-import com.linkedin.camus.etl.kafka.common.EtlZkClient;
 import com.linkedin.camus.etl.kafka.common.ExceptionWritable;
 import com.linkedin.camus.etl.kafka.mapred.EtlInputFormat;
 import com.linkedin.camus.etl.kafka.mapred.EtlMultiOutputFormat;
@@ -137,7 +136,8 @@ public class CamusJob extends Configured implements Tool {
     }
 
     private Job createJob(Properties props) throws IOException {
-        Job job = new Job(getConf());
+        //Job job = new Job(getConf());
+    	Job job = new Job();
         job.setJarByClass(CamusJob.class);
         job.setJobName("Camus Job");
 
@@ -307,24 +307,36 @@ public class CamusJob extends Configured implements Tool {
                 }
             }
 
-            List<URI> brokerURI;
-            try {
-                EtlZkClient zkClient = new EtlZkClient(props.getProperty(ZK_AUDIT_HOSTS),
-                        EtlInputFormat.getZkSessionTimeout(job),
-                        EtlInputFormat.getZkConnectionTimeout(job),
-                        EtlInputFormat.getZkTopicPath(job), EtlInputFormat.getZkBrokerPath(job));
-                brokerURI = new ArrayList<URI>(zkClient.getBrokersToUriMap().values());
-            } catch (Exception e) {
-                System.err
-                        .println("Can't get brokers from zookeeper, using previously found brokers");
-                brokerURI = readBrokers(fs, job);
-            }
-
-            writeBrokers(fs, job, brokerURI);
-	    if(getPostTrackingCountsToKafka(job)) {
+//            List<URI> brokerURI;
+//            try {
+//                EtlZkClient zkClient = new EtlZkClient(props.getProperty(ZK_AUDIT_HOSTS),
+//                        EtlInputFormat.getZkSessionTimeout(job),
+//                        EtlInputFormat.getZkConnectionTimeout(job),
+//                        EtlInputFormat.getZkTopicPath(job), EtlInputFormat.getZkBrokerPath(job));
+//                brokerURI = new ArrayList<URI>(zkClient.getBrokersToUriMap().values());
+//            } catch (Exception e) {
+//                System.err
+//                        .println("Can't get brokers from zookeeper, using previously found brokers");
+//                brokerURI = readBrokers(fs, job);
+//            }
+//
+//            writeBrokers(fs, job, brokerURI);
+            
+            //Temporarily hardcoding the broker URI
+            System.out.println("Creating the broker URI");
+            List<URI> brokerURI = new ArrayList<URI>();
+            brokerURI.add(new URI("tcp://eat1-app261.corp.linkedin.com:9090"));
+            brokerURI.add(new URI("tcp://eat1-app263.corp.linkedin.com:9092"));
+            brokerURI.add(new URI("tcp://eat1-app264.corp.linkedin.com:9093"));
+            brokerURI.add(new URI("tcp://eat1-app265.corp.linkedin.com:9094"));
+            System.out.println("Completed the broker URI");
+            System.out.println(getPostTrackingCountsToKafka(job));
+	       if(getPostTrackingCountsToKafka(job)) {
+	    	System.out.println("Submitting counts");
             	for (EtlCounts count : countsMap.values()) {
             		count.postTrackingCountToKafka(props.getProperty(KAFKA_MONITOR_TIER), brokerURI);
            	 }
+            	System.out.println("All counts submitted");
             }
 
         }
@@ -397,7 +409,7 @@ public class CamusJob extends Configured implements Tool {
     private void createReport(Job job, Map<String, Long> timingMap) throws IOException {
         StringBuilder sb = new StringBuilder();
 
-        sb.append("***********Timing Report*************\n");
+        sb.append("***********Timing Report*************GG\n");
 
         sb.append("Job time (seconds):\n");
 

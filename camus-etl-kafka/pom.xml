@@ -12,6 +12,14 @@
   <name>Camus ETL to move data from Kafka to Hadoop.</name>
   <packaging>jar</packaging>
   <dependencies>
+  <dependency>
+	<groupId>org.scala-lang</groupId>
+	<artifactId>scala-library</artifactId>
+	</dependency>
+  <dependency>
+  <groupId>com.linkedin.camus8</groupId>
+  <artifactId>camus-internal</artifactId>
+  </dependency>
     <dependency>
       <groupId>com.linkedin.camus</groupId>
       <artifactId>camus-api</artifactId>
@@ -33,7 +41,7 @@
       <artifactId>hadoop-core</artifactId>
     </dependency>
     <dependency>
-      <groupId>kafka</groupId>
+      <groupId>com.linkedin</groupId>
       <artifactId>kafka</artifactId>
     </dependency>
     <dependency>
@@ -68,7 +76,7 @@
         <artifactId>avro-maven-plugin</artifactId>
         <version>1.7.0</version>
         <executions>
-          <execution>
+    <!--       <execution>
             <id>schemas</id>
             <phase>generate-sources</phase>
             <goals>
@@ -80,7 +88,7 @@
               <sourceDirectory>${project.basedir}/src/main/avro/</sourceDirectory>
               <outputDirectory>${project.basedir}/src/main/java/</outputDirectory>
             </configuration>
-          </execution>
+          </execution>-->
         </executions>
       </plugin>
     </plugins>

@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.util.Iterator;
 import kafka.api.FetchRequest;
 import kafka.common.ErrorMapping;
+import kafka.javaapi.FetchResponse;
 import kafka.javaapi.consumer.SimpleConsumer;
 import kafka.javaapi.message.ByteBufferMessageSet;
 import kafka.message.Message;
@@ -56,7 +57,9 @@ public class KafkaReader {
 
 		// read data from queue
 		URI uri = kafkaRequest.getURI();
-		simpleConsumer = new SimpleConsumer(uri.getHost(), uri.getPort(), clientTimeout, fetchBufferSize);
+		simpleConsumer = new SimpleConsumer(uri.getHost(), uri.getPort(),
+				KafkaClient.getKafkaTimeoutValue(), KafkaClient.getKafkaBufferSize(),
+				KafkaClient.getKafkaClientName());
 		
 		fetch();
 
@@ -107,23 +110,32 @@ public class KafkaReader {
 	 * @throws IOException
 	 */
 	public boolean fetch() throws IOException {
-		if (currentOffset >= lastOffset)
+		if (currentOffset >= lastOffset) {
 			return false;
+		}
 
-		FetchRequest fetchRequest = new FetchRequest(kafkaRequest.getTopic(), kafkaRequest.getPartition(), currentOffset, fetchBufferSize);
 		long tempTime = System.currentTimeMillis();
-		ByteBufferMessageSet messageBuffer = simpleConsumer.fetch(fetchRequest);
+		KafkaClient kafkaClient = new KafkaClient();
+		FetchResponse fetchResponse = kafkaClient.getFetchRequests(simpleConsumer,
+					kafkaRequest.getTopic(), kafkaRequest.getPartition(),
+					Integer.parseInt(kafkaRequest.getNodeId()), currentOffset,
+					fetchBufferSize);
+		
+		//Ignore any potential errors with fetch request. Will be handled in the next run
+		 ByteBufferMessageSet messageBuffer = fetchResponse.messageSet(kafkaRequest.getTopic(),
+				kafkaRequest.getPartition());
 		lastFetchTime = (System.currentTimeMillis() - tempTime);
 		totalFetchTime += lastFetchTime;
 
-		if (!hasError(messageBuffer)) {
+		if (!hasError(fetchResponse.errorCode(kafkaRequest.getTopic(),
+				kafkaRequest.getPartition()))) {
 			messageIter = messageBuffer.iterator();
 			return true;
 		} else {
 			return false;
 		}
-
 	}
+
 
 	/**
 	 * Closes this context
@@ -140,8 +152,7 @@ public class KafkaReader {
 	 * Called by the default implementation of {@link #map} to check error code
 	 * to determine whether to continue.
 	 */
-	private boolean hasError(ByteBufferMessageSet messages) throws IOException {
-		int errorCode = messages.getErrorCode();
+	private boolean hasError(Short errorCode) throws IOException {
 
 		if (errorCode == ErrorMapping.OffsetOutOfRangeCode()) {
 			// offset cannot cross the maximum offset (guaranteed by Kafka
@@ -152,13 +163,14 @@ public class KafkaReader {
 				currentOffset = kafkaRequest.getEarliestOffset();
 				return false;
 			}
-			throw new IOException(kafkaRequest + " earliest offset=" + currentOffset + " : invalid offset.");
+			throw new IOException(kafkaRequest + " earliest offset="
+					+ currentOffset + " : invalid offset.");
 		} else if (errorCode == ErrorMapping.InvalidMessageCode()) {
-			throw new IOException(kafkaRequest + " current offset=" + currentOffset + " : invalid offset.");
-		} else if (errorCode == ErrorMapping.WrongPartitionCode()) {
-			throw new IOException(kafkaRequest + " : wrong partition");
+			throw new IOException(kafkaRequest + " current offset="
+					+ currentOffset + " : invalid offset.");
 		} else if (errorCode != ErrorMapping.NoError()) {
-			throw new IOException(kafkaRequest + " current offset=" + currentOffset + " error:" + errorCode);
+			throw new IOException(kafkaRequest + " current offset="
+					+ currentOffset + " error:" + errorCode);
 		} else {
 			return false;
 		}
